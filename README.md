@@ -252,14 +252,6 @@ notebooks/exploration/chat_rag.ipynb        →  Conversational RAG prototype
 
 ---
 
-## Running Tests
-
-```bash
-pytest tests/
-```
-
----
-
 ## Architecture
 
 ### Pipeline stages
