@@ -29,7 +29,7 @@ from scientific_rag.orchestration.session_store import (
 # Page config
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 st.set_page_config(
-    page_title="Scientific RAG Chat",
+    page_title="Welcome to the Scientific RAG Chat",
     page_icon="🔬",
     layout="wide",
 )
