@@ -1,8 +1,6 @@
 """
-Replaces: notebooks/01_indexing.ipynb
 Reuses:   chunker.flatten_metadata, chunker.chunk_document,
           embedders.LocalEmbedder, indexer.VectorStore
-          (all from src/scientific_rag/ — nothing is modified)
 
 Reads processed markdowns and metadata from local disk or S3,
 chunks them, and indexes into the local Qdrant instance.

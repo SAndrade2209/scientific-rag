@@ -1,9 +1,4 @@
 """
-extract_pdfs.py — Batch PDF extraction for production scale.
-
-Replaces: notebooks/00_pdf_extraction.ipynb
-Reuses:   scientific_rag.config (EXTRACT_PROMPT_PATH, RAW_DIR, MD_DIR, REF_DIR)
-
 Runs Docling OCR + LLM metadata extraction in parallel.
 Already-processed files (existing .json in ref_storage) are skipped automatically.
 

@@ -1,25 +1,133 @@
-# scientific-rag
+# Scientific RAG — Conversational Search over Technical Documents
 
-A production-ready **Conversational RAG** (Retrieval-Augmented Generation) system for querying collections of scientific and technical PDF documents using natural language.
+> A production-grade Retrieval-Augmented Generation system that lets domain experts query dense scientific corpora in natural language and receive cited, precise answers in seconds.
+
+![Python](https://img.shields.io/badge/Python-3.11-blue?logo=python)
+![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4.1-412991?logo=openai)
+![Qdrant](https://img.shields.io/badge/Vector%20Store-Qdrant-orange)
+![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker)
+![License](https://img.shields.io/badge/License-MIT-green)
 
 ---
 
-## Overview
+## The Problem
 
-End-to-end pipeline that ingests technical PDFs, converts them to structured markdown, chunks and embeds them with a local **bge-m3** model, indexes into **Qdrant** with hybrid (dense + BM25 sparse) search, and answers questions through a multi-stage conversational pipeline:
+Technical professionals — civil engineers, researchers, airport operations teams — need precise answers buried inside hundreds of dense PDFs. Keyword search breaks down when:
+
+- A concept appears under multiple synonyms (`"skid resistance"`, `"friction coefficient"`, `"µ"`)
+- The answer requires **synthesizing information across 3–4 separate papers**
+- Follow-up questions depend on earlier turns (`"What about under wet conditions?"`)
+- Rare domain terms (`CEL`, `LTPP`, `TDR`, `SMA`) have very low frequency and vanish inside dense embeddings
+
+A single-vector, single-query RAG cannot handle this class of problem reliably. This project builds the multi-stage pipeline that does.
+
+---
+
+## Solution Overview
+
+End-to-end pipeline from raw PDF to cited conversational answer:
 
 ```
-User input
-  → Guardrail (GPT-4.1)         — block or sanitize unsafe / off-topic input
-  → Memory                       — load conversation summary
-  → Query Expansion (GPT-4.1-mini) — generate intent + N sub-queries
-  → Per sub-query: hybrid search → cross-encoder rerank (retrieve_only, no LLM)
-  → Deduplicate → re-rerank merged pool against INTENT
-  → Generate answer (GPT-4.1-mini) with academic citation prompt
-  → Save to memory → persist session to SQLite / Redis
+User question
+  ↓
+[Guardrail]          — GPT-4.1 screens for safety, domain relevance, prompt injection
+  ↓
+[Memory]             — Load running summary of the conversation (LangChain CSBM)
+  ↓
+[Query Expansion]    — GPT-4.1-mini rewrites into N semantically diverse sub-queries
+                       + extracts an explicit INTENT statement
+  ↓
+[Per sub-query]
+  → Hybrid Search    — Dense (bge-m3 cosine) + Sparse (BM25) fused with RRF
+  → Rerank           — Cross-encoder (bge-reranker-base), retrieve_only=True
+  ↓
+[Deduplication]      — Merge all sub-query chunks, keep best rerank score per chunk
+  ↓
+[Re-rank vs INTENT]  — Second pass against the extracted intent (not the raw query)
+  ↓
+[Generate Answer]    — GPT-4.1-mini with academic citation prompt → APA inline refs
+  ↓
+[Save Memory]        — Persist turn to ConversationSummaryBufferMemory → SQLite / Redis
 ```
 
-The Streamlit chat UI (`app.py`) provides a debug sidebar with guardrail verdicts, query expansion details, source citations, memory state, and session persistence diagnostics.
+The Streamlit chat UI (`app.py`) exposes a debug sidebar showing every stage: guardrail verdict, expanded sub-queries, retrieved chunks with scores, and memory state.
+
+---
+
+## Why Each Stage Exists
+
+| Stage | Problem it solves |
+|---|---|
+| **Guardrail** | Blocks jailbreaks, off-topic queries, and prompt injections before they hit the expensive retrieval chain |
+| **Query expansion** | A single embedding misses synonyms and related angles; N diverse sub-queries cover more of the vector space |
+| **BM25 sparse vectors** | Dense embeddings compress rare terms (`LTPP`, `CEL`, `TDR`) into indistinguishable regions; BM25 preserves exact-term signal |
+| **RRF fusion** | Merges dense + sparse rankings without manual weight tuning — items in both lists rise to the top |
+| **`retrieve_only` flag** | Sub-queries skip the LLM call entirely; only **1 LLM completion** is made per turn regardless of query count |
+| **Re-rank vs INTENT** | Conversational follow-ups (`"elaborate on that"`) have low lexical signal; ranking against the extracted intent gives better relevance than the raw utterance |
+| **ConversationSummaryBufferMemory** | Avoids repeating full history in every prompt; LangChain summarizes older turns, keeping the context window bounded |
+
+---
+
+## Domain & Dataset
+
+The corpus covers **airport pavement engineering** — a domain where terminology is highly specialized, documents cross-reference each other, and precision matters for safety-critical decisions.
+
+| Document | Topic |
+|---|---|
+| Winter Runway Friction (NASA) | Friction measurement under winter conditions |
+| UHPW Rubber Removal Field Evaluation | Ultra-high-pressure water systems for runway cleaning |
+| Finite Element Framework for Runway Friction | CEL tire-fluid simulation in Abaqus |
+| Carbon Fiber Grille Snow Melting | Electrically heated airport pavement |
+| Conductive Asphalt Lifecycle Assessment | Structural + thermal design of heated pavement |
+| TDR Seasonal Monitoring (LTPP) | Time Domain Reflectometry moisture sensing |
+| Stone Mastic Asphalt Specifications | Aggregate grading standards for SMA |
+| Snowfall Impact on Airport Operations | Operational delay analysis |
+| Speed Bump Energy Harvesting | Electromagnetic energy recovery from vehicles |
+
+The test suite validates **5 question categories** at increasing difficulty:
+
+1. **Single-document detail** — exact specs, equipment names, numerical values
+2. **Multi-document integration** — answers that require stitching 3+ papers
+3. **Comparative analysis** — technology A vs. technology B trade-offs
+4. **Technical terminology** — domain jargon like `CEL`, `PIARC`, `RRF`
+5. **Out-of-scope** — questions the system must refuse, not hallucinate
+
+Sample hard queries from the benchmark:
+
+```
+"What UHPW systems were tested at Edwards AFB and what were their operating pressures?"
+
+"Explain the relationship between pavement macrotexture, water film depth,
+ and the onset of hydroplaning for aircraft tires."
+
+"Compare carbon fiber grille vs conductive asphalt snow melting technologies
+ in terms of W/m², construction method, and measured effectiveness."
+```
+
+---
+
+## Key Engineering Decisions
+
+### 1. Local embedder over API embeddings
+
+`BAAI/bge-m3` runs locally (no per-call cost), supports **8 192-token context windows**, and performs competitively with `text-embedding-3-large` on scientific text. Chunking long technical sections without truncation was a hard requirement.
+
+### 2. Hybrid dense + BM25 in a single Qdrant collection
+
+Both vector types live in the same collection. At query time, two `Prefetch` queries run in parallel and `FusionQuery(Fusion.RRF)` merges them — no infrastructure split, no synchronization problem.
+
+### 3. Two reranking passes
+
+- **Per sub-query** — `bge-reranker-base` scores each retrieved chunk against its own sub-query, filtering noise before the merge.
+- **Global re-rank against INTENT** — after deduplication, the merged pool is re-ranked against the extracted intent (e.g., `"Understand hydroplaning physics"`) rather than the raw query (`"tell me more about that"`).
+
+### 4. Stateless `ChatEngine` with external memory
+
+`ChatEngine.process_turn()` is a pure function: `(user_input, memory) → TurnResult`. State lives in the caller (Streamlit `session_state`, a notebook variable). This makes the engine trivially testable and interface-agnostic.
+
+### 5. SQLite-first, Redis-ready session store
+
+Sessions persist to SQLite locally with zero infrastructure. Swapping to Redis (with TTL expiry) requires only a `build_session_store(backend="redis")` call — the interface is identical.
 
 ---
 
@@ -204,25 +312,12 @@ pytest tests/
 | **Guardrail** | `GuardrailAgent` | GPT-4.1 |
 | **Query expansion** | `QueryExpander` | GPT-4.1-mini |
 | **Embedding** | `LocalEmbedder` | BAAI/bge-m3 |
-| **Sparse encoding** | Built-in BM25 | fastembed |
+| **Sparse encoding** | `BM25Encoder` | fastembed |
 | **Hybrid search** | `VectorStore` | Qdrant RRF fusion |
-| **Reranking** | `Reranker` | BAAI/bge-reranker-base |
+| **Reranking (×2)** | `RAGPipelineWithReranking` | BAAI/bge-reranker-base |
 | **Answer generation** | `MultiQueryRAG` | GPT-4.1-mini |
 | **Memory** | LangChain `ConversationSummaryBufferMemory` | GPT-4.1-mini |
 | **Session persistence** | `SQLiteSessionStore` / `RedisSessionStore` | — |
-
-### Key design decisions
-
-| Choice | Rationale |
-|---|---|
-| `bge-m3` local embedder | Free, 8192 tokens, strong multilingual & scientific text |
-| BM25 sparse vectors | Catches rare technical terms missed by dense vectors |
-| RRF fusion | Merges dense + sparse without manual weight tuning |
-| Multi-query expansion | Different phrasings activate different vector regions |
-| `retrieve_only` flag | Sub-queries skip LLM call — only 1 LLM call total per turn |
-| Re-rerank against **intent** | More accurate than raw query for conversational follow-ups |
-| Cross-encoder reranking | Jointly encodes question + chunk for precise relevance scoring |
-| SQLite → Redis session store | Zero infrastructure locally, auto-expiring in production |
 
 ---
 
@@ -230,17 +325,26 @@ pytest tests/
 
 | Sub-package | Key exports | Purpose |
 |---|---|---|
-| `config` | `MD_DIR`, `QDRANT_URL`, `QA_MODEL`, … | Project-wide constants |
+| `config` | `MD_DIR`, `QDRANT_URL`, `QA_MODEL` | Project-wide paths & defaults |
 | `utils` | `LogCapture`, `create_memory` | Shared utilities |
 | `ingestion` | `load_and_chunk_all`, `get_all_stems` | Document preparation |
 | `vectorstore` | `LocalEmbedder`, `VectorStore` | Embeddings & Qdrant |
 | `retrieval` | `RAGPipeline`, `RAGPipelineWithReranking`, `MultiQueryRAG` | Search & generation |
 | `orchestration` | `ChatEngine`, `GuardrailAgent`, `QueryExpander`, `build_session_store` | Conversational pipeline |
 
-All symbols are re-exported from the root `__init__.py`:
+All public symbols are re-exported from the root package:
 
 ```python
-from scientific_rag import ChatEngine, VectorStore, MultiQueryRAG
+from scientific_rag import (
+    ChatEngine,           # top-level conversational orchestrator
+    VectorStore,          # hybrid Qdrant store
+    MultiQueryRAG,        # multi-query retrieval + answer generation
+    GuardrailAgent,       # safety + relevance filter
+    QueryExpander,        # intent + sub-query generation
+    LocalEmbedder,        # bge-m3 local embedder
+    build_session_store,  # SQLite or Redis session persistence
+    create_memory,        # LangChain memory factory
+)
 ```
 
 ---
