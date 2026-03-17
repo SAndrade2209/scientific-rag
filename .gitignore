@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+.env/
+
+# Environment variables — NEVER commit secrets
+.env
+.env.local
+.env.*.local
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Data — large files, not tracked in git
+data/raw/
+data/processed/
+*.db
+
+# Checkpoints
+data/.pipeline_checkpoint.json
+data/.index_checkpoint.json
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Qdrant local storage (if running embedded)
+qdrant_storage/
+qdrant_data/
+
+# Logs
+*.log
+logs/
+
+# Notebook outputs with personal paths — strip outputs before committing
+# Tip: use `jupyter nbconvert --clear-output --inplace notebooks/**/*.ipynb`
+notebooks/exploration/
+notebooks/archive/
+notebooks/testing/

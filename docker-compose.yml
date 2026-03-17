@@ -1,0 +1,21 @@
+# docker-compose.yml — Qdrant with persistent storage
+#
+# Usage:
+#   docker compose up -d        # start
+#   docker compose down          # stop (data persists in ./qdrant_data/)
+#   docker compose down -v       # stop and DELETE all data
+
+version: "3.9"
+
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"   # REST API
+      - "6334:6334"   # gRPC (faster for bulk upserts)
+    volumes:
+      - ./qdrant_data:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__GRPC_PORT: 6334
+    restart: unless-stopped
+

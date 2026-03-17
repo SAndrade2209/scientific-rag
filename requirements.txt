@@ -1,0 +1,36 @@
+# Core pipeline
+openai>=1.0
+qdrant-client>=1.9
+fastembed>=0.3
+sentence-transformers>=2.2
+langchain-text-splitters>=0.2
+loguru>=0.7
+python-dotenv>=1.0
+
+# Conversation memory
+langchain>=0.2
+langchain-openai>=0.1
+langchain-community>=0.2
+
+# PDF extraction
+docling>=1.0
+tqdm>=4.60
+
+# AWS Bedrock embedder (optional)
+boto3>=1.34
+
+# Notebook generation
+nbformat>=5.9
+
+# Development & notebooks
+pytest>=8.0
+jupyter>=1.0
+ipykernel>=6.0
+
+# Web UI
+streamlit>=1.32
+
+# Session persistence (Redis is optional — only needed for production/AWS)
+# SQLite backend works out of the box with no extra dependencies
+redis>=5.0
+
