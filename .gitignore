@@ -32,6 +32,7 @@ data/processed/
 # Checkpoints
 data/.pipeline_checkpoint.json
 data/.index_checkpoint.json
+tests/
 
 # IDE
 .idea/

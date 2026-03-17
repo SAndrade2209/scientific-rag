@@ -12,7 +12,7 @@
 
 ## The Problem
 
-Technical professionals — civil engineers, researchers, airport operations teams — need precise answers buried inside hundreds of dense PDFs. Keyword search breaks down when:
+Technical professionals need precise answers buried inside hundreds of dense PDFs. Keyword search breaks down when:
 
 - A concept appears under multiple synonyms (`"skid resistance"`, `"friction coefficient"`, `"µ"`)
 - The answer requires **synthesizing information across 3–4 separate papers**
@@ -65,44 +65,6 @@ The Streamlit chat UI (`app.py`) exposes a debug sidebar showing every stage: gu
 | **`retrieve_only` flag** | Sub-queries skip the LLM call entirely; only **1 LLM completion** is made per turn regardless of query count |
 | **Re-rank vs INTENT** | Conversational follow-ups (`"elaborate on that"`) have low lexical signal; ranking against the extracted intent gives better relevance than the raw utterance |
 | **ConversationSummaryBufferMemory** | Avoids repeating full history in every prompt; LangChain summarizes older turns, keeping the context window bounded |
-
----
-
-## Domain & Dataset
-
-The corpus covers **airport pavement engineering** — a domain where terminology is highly specialized, documents cross-reference each other, and precision matters for safety-critical decisions.
-
-| Document | Topic |
-|---|---|
-| Winter Runway Friction (NASA) | Friction measurement under winter conditions |
-| UHPW Rubber Removal Field Evaluation | Ultra-high-pressure water systems for runway cleaning |
-| Finite Element Framework for Runway Friction | CEL tire-fluid simulation in Abaqus |
-| Carbon Fiber Grille Snow Melting | Electrically heated airport pavement |
-| Conductive Asphalt Lifecycle Assessment | Structural + thermal design of heated pavement |
-| TDR Seasonal Monitoring (LTPP) | Time Domain Reflectometry moisture sensing |
-| Stone Mastic Asphalt Specifications | Aggregate grading standards for SMA |
-| Snowfall Impact on Airport Operations | Operational delay analysis |
-| Speed Bump Energy Harvesting | Electromagnetic energy recovery from vehicles |
-
-The test suite validates **5 question categories** at increasing difficulty:
-
-1. **Single-document detail** — exact specs, equipment names, numerical values
-2. **Multi-document integration** — answers that require stitching 3+ papers
-3. **Comparative analysis** — technology A vs. technology B trade-offs
-4. **Technical terminology** — domain jargon like `CEL`, `PIARC`, `RRF`
-5. **Out-of-scope** — questions the system must refuse, not hallucinate
-
-Sample hard queries from the benchmark:
-
-```
-"What UHPW systems were tested at Edwards AFB and what were their operating pressures?"
-
-"Explain the relationship between pavement macrotexture, water film depth,
- and the onset of hydroplaning for aircraft tires."
-
-"Compare carbon fiber grille vs conductive asphalt snow melting technologies
- in terms of W/m², construction method, and measured effectiveness."
-```
 
 ---
 
@@ -211,11 +173,6 @@ scientific_rag/
 │   │   ├── test_rag.ipynb
 │   │   └── query_test.ipynb
 │   └── archive/                      # Superseded notebooks
-│
-├── tests/
-│   ├── test_quick.py                 # Quick smoke test
-│   ├── test_reranking.py             # Reranking pipeline verification
-│   └── test_questions_comprehensive.py
 │
 └── data/
     ├── raw/                          # Original PDFs (gitignored)
